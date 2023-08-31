@@ -39,7 +39,7 @@ def decode(args):
     o.flush()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Patch eCos boot2 image to run custom code instead of jumping into the application')
+    parser = argparse.ArgumentParser(description='Decode hexdump output from lolmon')
     parser.add_argument('file', help='hexdump file')
     parser.add_argument('--output', '-o', help='hexdump file')
     args = parser.parse_args()
