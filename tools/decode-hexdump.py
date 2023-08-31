@@ -12,6 +12,7 @@ def decode(args):
     seen_command = False
 
     program = bytearray()
+    length = None
     for line in i:
         line = line.decode('ascii', errors='replace').strip()
         if seen_command:
@@ -35,7 +36,10 @@ def decode(args):
         elif line.startswith('> rw'):
             seen_command = True
 
-    o.write(program[:length])
+    if length:
+        o.write(program[:length])
+    else:
+        o.write(program)
     o.flush()
 
 if __name__ == '__main__':
