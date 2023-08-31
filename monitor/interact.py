@@ -268,7 +268,7 @@ class Lolmon:
     @staticmethod
     def riu_addr(offset):
         assert offset < 0x200000
-        one = offset % 1
+        one = offset & 1
         return 0xbf000000 + (offset // 2) * 4 + one
 
     def riu_read8(self, offset):  return self.read8 (self.riu_addr(offset))
@@ -324,8 +324,159 @@ class Block:
     def riu_write32(self, offset, value): return self.l.riu_write32(self.riu_base + offset, value)
 
 
+class EMAC(Block):
+    CTL = 0x00  # offsets are in RIU notation
+    CFG = 0x04
+    SR  = 0x08
+    TAR = 0x0c
+    TCR = 0x10
+    TSR = 0x14
+    RBQP= 0x18
+    TBQP= 0x1c
+    RSR = 0x20
+    ISR = 0x24
+    IER = 0x28
+    IDR = 0x2c
+    IMR = 0x30
+
+    CTL_LB  = BIT(0)
+    CTL_LBL = BIT(1)
+    CTL_RE  = BIT(2)
+    CTL_TE  = BIT(3)
+    CTL_MPE = BIT(4)
+    CTL_CSR = BIT(5)
+    CTL_ISR = BIT(6)
+    CTL_WES = BIT(7)
+    CTL_BP  = BIT(8)
+
+    def read_macaddr(self, offset):
+        lo = self.riu_read32(offset)
+        hi = self.riu_read32(offset + 4)
+        return f'{lo:x}{hi:x}'
+
+    def init(self):
+        self.mystery_init_sequence()
+        self.riu_write32(0x100, 0xf051)
+        self.riu_read32(self.CTL)
+        self.riu_write32(self.CTL, 0)
+
+        self.riu_write32(self.RBQP, 1 * MiB)
+        self.riu_write32(self.TBQP, 2 * MiB)
+
+        self.riu_write32(0x108, 0)
+        self.riu_write32(0x104, 0x04020081)
+        self.riu_write32(self.IER, 0x437)
+        self.riu_write32(0x104, 1)
+        print(f'int mask: {self.riu_read32(self.IMR):x}')
+        print(f'mac1: {self.read_macaddr(0x98)}')
+
+        self.riu_write32(self.CFG, 0x803)
+
+        self.riu_write32(self.CTL, 0x1c)  # MDIO on
+
+        self.enable()
+        ephy.check()
+
+
+    def enable(self):
+        ctl = self.riu_read32(self.CTL)
+        self.riu_write32(self.CTL, ctl | self.CTL_TE | self.CTL_MPE)
+        self.riu_write32(self.CFG, self.riu_read32(self.CFG) | 3)
+
+    def tx_one_frame(self, addr, size):
+        self.riu_write32(self.TAR, addr & 0x03ffffff)
+        self.riu_write32(self.TCR, size)
+
+    @staticmethod
+    def mystery_init_sequence():
+        """
+        A series of magic writes that successfully brings the Ethernet link up.
+        Ripped from vendor firmware, but it's a series of uncopyrightable facts. ;)
+        """
+        uVar1 = l.riu_read8(0x121f60);
+        l.riu_write8(0x121f60,uVar1 & 0xfc | 2);
+        l.riu_write8(0x103364,0x10);
+        l.riu_write8(0x121f23,8);
+        l.riu_write8(0x121f24,8);
+        l.riu_write8(0x121f25,0);
+        uVar1 = l.riu_read8(0xe60);
+        l.riu_write8(0xe60,uVar1 & 0xfe);
+        l.riu_write8(0x324f,2);
+        l.riu_write8(0x3251,1);
+        l.riu_write8(0x3277,0x18);
+        l.riu_write8(0x3172,0x80);
+        l.riu_write8(0x32fc,0);
+        l.riu_write8(0x32fd,0);
+        l.riu_write8(0x32b7,7);
+        l.riu_write8(0x32cb,0x11);
+        l.riu_write8(0x32cc,0x80);
+        l.riu_write8(0x32cd,0xd1);
+        l.riu_write8(0x32d4,0);
+        l.riu_write8(0x32b9,0x40);
+        l.riu_write8(0x32bb,5);
+        l.riu_write8(0x32ea,0x46);
+        l.riu_write8(0x33a1,0);
+        l.riu_write8(0x333a,3);
+        l.riu_write8(0x333b,0);
+        l.riu_write8(0x33c5,0);
+        l.riu_write8(0x3330,0x43);
+        l.riu_write8(0x3339,0x41);
+        l.riu_write8(0x33e8,6);
+        l.riu_write8(0x312b,0);
+        l.riu_write8(0x33e8,0);
+        l.riu_write8(0x312b,0);
+        l.riu_write8(0x33e8,6);
+        l.riu_write8(0x31aa,0x1c);
+        l.riu_write8(0x31ac,0x1c);
+        l.riu_write8(0x31ad,0x1c);
+        l.riu_write8(0x31ae,0x1c);
+        l.riu_write8(0x31af,0x1c);
+        l.riu_write8(0x33e8,0);
+        l.riu_write8(0x33e8,0);
+        l.riu_write8(0x31ab,0x28);
+
+class EPHY(Block):
+    # MDIO read/write
+    def read(self, offset):
+        self.write16(4, self.read16(4) | 4)
+        return self.read16(4 * offset)
+
+    def write(self, offset, value):
+        self.write16(4 * offset, value)
+
+    def dump(self):
+        for j in range(0, 32, 8):
+            print('  '.join([hex(ephy.read(j+i)).rjust(6, ' ') for i in range(8)]))
+
+    def check(self):
+        self.write(0, 0x2100)
+        self.write(4, 0x1e1)
+        self.write(0, 0x1200)
+        time.sleep(2)
+        self.link()
+
+    def link(self):
+        print(f'link? {ephy.read(1) & 4}')
+
+class Pinmux(Block):
+    # RIU offset 2
+    #   - set 0x3000 -> breaks uart
+    #   - 0xe00 -> can be set, doesn't matter
+    # RIU offset 6
+    #   - 0x8000 -> breaks uart
+    #   - 0x333  -> can be set
+    # RIU offset 0xa6
+    #   - 0xfff0 -> ok
+    #   - 0xf -> writing anything but 0x4 breaks uart
+    def dump(self):
+        l.dump16(self.base, 0x100)
+
+
 UART = Block
 
 l = Lolmon('/dev/ttyUSB0')
 l.connection_test()
-uart0 = Block(l, 0xbf201300)
+pinmux = Pinmux(l, 0xbf203c00)
+uart0 = UART(l, 0xbf201300)
+emac = EMAC(l, 0xbf243600)
+ephy = EPHY(l, 0xbf006200)
