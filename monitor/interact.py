@@ -261,6 +261,30 @@ class Lolmon:
     dump16 = make_dump('rh')
     dump32 = make_dump('rw')
 
+    # Special read/write methods are provided to deal with RIU's weirdness:
+    # - Offset 2*n   -> 4*n
+    # - Offset 2*n+1 -> 4*n+1
+
+    @staticmethod
+    def riu_addr(offset):
+        assert offset < 0x200000
+        one = offset % 1
+        return 0xbf000000 + (offset // 2) * 4 + one
+
+    def riu_read8(self, offset):  return self.read8 (self.riu_addr(offset))
+    def riu_read16(self, offset): return self.read16(self.riu_addr(offset))
+    def riu_read32(self, offset):
+        lo = self.read16(self.riu_addr(offset))
+        hi = self.read16(self.riu_addr(offset + 2))
+        return lo | (hi << 16)
+
+    def riu_write8(self, offset, value):  return self.write8 (self.riu_addr(offset), value)
+    def riu_write16(self, offset, value): return self.write16(self.riu_addr(offset), value)
+    def riu_write32(self, offset, value):
+        self.write16(self.riu_addr(offset + 0), (value >>  0) & 0xffff)
+        self.write16(self.riu_addr(offset + 2), (value >> 16) & 0xffff)
+
+
     def call(self, addr, a=0, b=0, c=0, d=0):
         self.run_command_noreturn('call %x %d %d %d %d' % (addr, a, b, c, d))
 
@@ -273,6 +297,8 @@ class Block:
         self.l = lolmon
         if base:
             self.base = base
+            if base in range(0xbf000000, 0xc0000000):
+                self.riu_base = (base - 0xbf000000) // 2
 
     def read8(self, offset): return self.l.read8(self.base + offset)
     def read16(self, offset): return self.l.read16(self.base + offset)
@@ -287,7 +313,15 @@ class Block:
     def setclr32(self, offset, bit, value): return self.l.setclr32(self.base + offset, bit, value)
 
     def dump(self):
-        self.l.dump32(self.base, 0x20)
+        self.l.dump32(self.base, 0x40)
+
+    def riu_read8(self, offset): return self.l.riu_read8(self.riu_base + offset)
+    def riu_read16(self, offset): return self.l.riu_read16(self.riu_base + offset)
+    def riu_read32(self, offset): return self.l.riu_read32(self.riu_base + offset)
+
+    def riu_write8(self, offset, value): return self.l.riu_write8(self.riu_base + offset, value)
+    def riu_write16(self, offset, value): return self.l.riu_write16(self.riu_base + offset, value)
+    def riu_write32(self, offset, value): return self.l.riu_write32(self.riu_base + offset, value)
 
 
 UART = Block
