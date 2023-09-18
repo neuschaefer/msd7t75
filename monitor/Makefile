@@ -9,7 +9,7 @@ CPUFLAGS := -EL -march=74kf
 CFLAGS := -Os -fno-builtin -nostdlib -Wall -Wextra -Wno-unused-function -Wno-main -fno-pic -mno-dsp
 LDFLAGS := -T monitor.ld -EL
 
-all: monitor.bin monitor.lzma scream.bin scream.lzma testcard.bin
+all: monitor.bin monitor.lzma scream.bin scream.lzma
 
 %.o: %.S
 	$(CC) -c $(CPUFLAGS) $< -o $@
