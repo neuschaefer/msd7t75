@@ -2,8 +2,8 @@
 
 	.text
 
-	# Pad until 0x82000180
-	.rep 0x60
+	# Pad from 0x82000180 until 0x82000240
+	.rep 0x30
 	nop
 	.endr
 
