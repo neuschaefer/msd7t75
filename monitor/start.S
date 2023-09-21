@@ -19,8 +19,6 @@ here:
 	sh	t1, 0x1300(t0)
 	li	t1, '\r'
 	sh	t1, 0x1300(t0)
-	li	t1, '\n'
-	sh	t1, 0x1300(t0)
 
 	# Relocate lolmon to its designated home at 0x80008000
 	# - copy
