@@ -1,5 +1,7 @@
 #include <regdef.h>
 
+#define Status $12
+
 	.text
 
 	# Pad from 0x82000180 until 0x82000240
@@ -10,6 +12,12 @@
 entry:
 	bal	here
 here:
+
+	# Disable interrupts
+	mfc0	t0, Status
+	srl	t0, t0, 1 # clear lowest bit
+	sll	t0, t0, 1
+	mtc0	t0, Status
 
 	li	t2, 0x83000008
 	beq	ra, t2, new_world
