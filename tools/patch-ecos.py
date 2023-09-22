@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-import argparse
+import argparse, hashlib
 
 KiB = 1 << 10
 MiB = 1 << 20
